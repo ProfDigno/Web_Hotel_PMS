@@ -73,6 +73,27 @@ La web pública de reservas, agencias, grupos, comandas de cocina, CRM y múltip
 
 Hacé doble clic en `iniciar-pms.bat`. Iniciará la API y la interfaz web en una sola ventana. Abrí `http://localhost:3000` (o el puerto configurado en `.env`). También podés ejecutar `npm run dev` desde la raíz. Para usar la versión compilada, ejecutá `npm run build` y luego `npm start`.
 
+## Instalación del VPS
+
+La producción está en `/opt/hotel-pms`, con una base PostgreSQL `hotel_pms` independiente de la base local de desarrollo. El servicio `hotel-pms` escucha en `127.0.0.1:3000` mediante `HOST=127.0.0.1`; nginx publica la aplicación por el puerto 80. Los secretos están en `/opt/hotel-pms/.env` y no deben agregarse a Git. Lavadero Racing quedó deshabilitado, pero se conservaron su servicio, sus archivos y su base `bdlavadero_racing`.
+
+Para publicar una nueva versión, primero compilá y probá en local, luego enviá los cambios a la rama `main`. En el VPS, como `root`:
+
+```sh
+cd /opt/hotel-pms
+umask 077
+runuser -u postgres -- pg_dump -Fc hotel_pms > "/root/hotel-pms-$(date +%Y%m%d-%H%M%S).dump"
+runuser -u hotel-pms -- git pull --ff-only
+runuser -u hotel-pms -- npm ci --no-audit --no-fund
+runuser -u hotel-pms -- npm run build
+runuser -u hotel-pms -- npm run db:migrate
+systemctl restart hotel-pms
+systemctl is-active hotel-pms
+curl -fsS -o /dev/null http://127.0.0.1:3000/
+```
+
+La copia de la base es anterior a las migraciones y permite recuperar los datos si una actualización falla. La base local no se sincroniza con producción. La IP pública usa HTTP y transmite credenciales y datos sin cifrado; conviene configurar HTTPS.
+
 
 ## Gastos y caja
 
