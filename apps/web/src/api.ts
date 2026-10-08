@@ -1,4 +1,5 @@
 import { performMutation } from './action-result';
+import { requestId } from './request-id';
 
 export const BASE = '/api';
 export type Json = Record<string, any>;
@@ -23,7 +24,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
       if(fiscal&&attempts++>0){
         const document=await api<any>(`/facturas/${fiscal[1]}`);
         if(document.estado!=='borrador'){
-          if(document.cdc&&document.estado!=='aprobado')return api<T>(`/facturas/${fiscal[1]}/consultar`,{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()}});
+          if(document.cdc&&document.estado!=='aprobado')return api<T>(`/facturas/${fiscal[1]}/consultar`,{method:'POST',headers:{'Idempotency-Key':requestId()}});
           return document as T;
         }
       }

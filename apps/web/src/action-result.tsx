@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { ActionResultDialog, type ActionResultState } from './ActionResultDialog';
+import { requestId } from './request-id';
 
 export class ActionDismissedError extends Error {
   constructor(message='Operación cancelada'){super(message);}
@@ -59,7 +60,7 @@ export function performMutation<T>(path:string,method:string,body:string|undefin
     if(pending.fingerprint===fingerprint)return pending.promise;
     return Promise.reject(new Error('Esperá a que termine la operación actual'));
   }
-  const key=crypto.randomUUID();
+  const key=requestId();
   const [loadingTitle,successTitle]=titles(path,method);
   if(!listeners.size)return request(key);
   let resolve!:(value:T)=>void,reject!:(reason:unknown)=>void;

@@ -14,6 +14,7 @@ import { Sales, type SalesTab } from './Sales';
 import { Purchases, type PurchaseTab } from './Purchases';
 import { ActionResultDialog, type ActionResultState } from './ActionResultDialog';
 import { ActionDismissedError } from './action-result';
+import { requestId } from './request-id';
 import './reservation-payment.css';
 const RoomAnalytics=lazy(()=>import('./RoomAnalytics').then(module=>({default:module.RoomAnalytics})));
 
@@ -280,7 +281,7 @@ function NewReservation({onClose,run,onSaved}:{onClose:()=>void,run:any,onSaved:
         const room=rooms?.find(x=>String(x.idhabitacion)===id);
         return {fk_idhabitacion:id,tarifa_noche_gs:room?rateFor(room):'0'};
       })});
-      if(reservationRequest.current?.body!==body)reservationRequest.current={body,key:crypto.randomUUID()};
+      if(reservationRequest.current?.body!==body)reservationRequest.current={body,key:requestId()};
       await api('/reservas',{method:'POST',body,headers:{'Idempotency-Key':reservationRequest.current.key}});
       onSaved();
       setReservationState('success');
@@ -340,7 +341,7 @@ function ReservationPaymentForm({id,pay,setPay,refresh,onPaymentSaved,saldo}:{id
     submitLock.current=true;
     setPaymentState('loading');
     setPaymentError('');
-    solicitudId.current??=crypto.randomUUID();
+    solicitudId.current??=requestId();
     try{
       await api(`/reservas/${id}/pagos`,{method:'POST',body:JSON.stringify({...pay,solicitud_id:solicitudId.current}),headers:{'Idempotency-Key':solicitudId.current},signal:AbortSignal.timeout(30000)});
       showSuccess();
@@ -379,7 +380,7 @@ function ReservationFinancialDetail({id,onClose,refresh,run,user,onPaymentSaved}
   const operationRetry=useRef<(()=>Promise<void>)|null>(null);
   const operationLock=useRef(false);
   const operationRequest=useRef<{path:string;key:string}|null>(null);
-  const operationKey=(path:string)=>{if(operationRequest.current?.path!==path)operationRequest.current={path,key:crypto.randomUUID()};return operationRequest.current.key};
+  const operationKey=(path:string)=>{if(operationRequest.current?.path!==path)operationRequest.current={path,key:requestId()};return operationRequest.current.key};
   const checkoutLock=useRef(false);
   const executeOperation=async(fn:()=>Promise<void>)=>{
     if(operationLock.current)return;
