@@ -1,0 +1,44 @@
+{
+  "name": "@hotel/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch --exclude \"../web/**\" --env-file=../../.env.dev src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "node --import tsx --test --test-concurrency=1 src/sifen.test.ts src/database.test.ts src/cash.test.ts src/rooms.test.ts src/guests.test.ts src/sales.test.ts src/room-analysis.test.ts src/idempotency.test.ts src/expenses.test.ts src/purchases.test.ts",
+    "db:migrate": "tsx src/migrate.ts",
+    "admin:create": "tsx src/seed-admin.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.0",
+    "@nestjs/core": "^11.1.0",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.0",
+    "@nestjs/platform-express": "^11.1.0",
+    "bcryptjs": "^2.4.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "dotenv": "^16.4.5",
+    "facturacionelectronicapy-qrgen": "^1.0.0",
+    "facturacionelectronicapy-setapi": "^1.0.0",
+    "facturacionelectronicapy-xmlgen": "^1.0.0",
+    "facturacionelectronicapy-xmlsign": "^1.0.0",
+    "pdfkit": "^0.20.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.10.0",
+    "@types/pdfkit": "^0.17.6",
+    "@types/pg": "^8.11.10",
+    "@types/qrcode": "^1.5.6",
+    "@types/xml2js": "^0.4.14",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

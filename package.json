@@ -1,0 +1,13 @@
+{
+  "name": "hotel-pms-paraguay",
+  "private": true,
+  "workspaces": ["apps/api", "apps/web"],
+  "scripts": {
+    "dev": "npm run dev -w apps/api",
+    "start": "npm run start -w apps/api",
+    "build": "npm run build -w apps/api && npm run build -w apps/web",
+    "test": "npm run test -w apps/api",
+    "db:migrate": "npm run db:migrate -w apps/api"
+  },
+  "devDependencies": { "concurrently": "^9.1.2" }
+}

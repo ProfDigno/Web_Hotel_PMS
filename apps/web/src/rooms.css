@@ -1,0 +1,34 @@
+.room-statuses { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:6px; margin-left:10px; }
+.room-occupancy { display:inline-flex; align-items:center; gap:5px; border:1px solid #dfe6df; border-radius:999px; padding:4px 9px; font-size:10px; font-weight:700; white-space:nowrap; }
+.room-occupancy.occupied { background:#e8f2ed; color:#315849; border-color:#bcd4c5; }
+.room-occupancy.unoccupied { background:#f6f7f3; color:#748478; }
+.room-guest-detail { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin:0 0 16px; }
+.room-guest-name { display:flex; align-items:flex-start; gap:7px; flex:1 1 120px; min-width:0; font-size:12px; color:#314337; }
+.room-guest-name svg { flex:none; margin-top:2px; }
+.room-guest-name span { overflow-wrap:anywhere; }
+.room-guest-detail .small-button { flex-shrink:0; background:#ffffffb3; border-color:var(--room-border); color:#38584a; }
+.room-card.room-state-available { --room-accent:#64836d; --room-border:#edece6; --room-icon-bg:#eaf2ec; background:#fff; }
+.room-card.room-state-occupied { --room-accent:#99574d; --room-border:#edd2cc; --room-icon-bg:#f7dcd5; background:#FCEDEA; }
+.room-card.room-state-overdue { --room-accent:#782b25; --room-border:#bd6b60; --room-icon-bg:#d99186; background:#e7b1a9; }
+.room-card.room-state-dirty { --room-accent:#8c6d23; --room-border:#ebdfae; --room-icon-bg:#f5e8ac; background:#FFF7D6; }
+.room-card.room-state-cleaning { --room-accent:#9d612b; --room-border:#efd8bd; --room-icon-bg:#ffe1bb; background:#FFF0DF; }
+.room-card.room-state-inspection { --room-accent:#3e6c8d; --room-border:#cddfec; --room-icon-bg:#d3e9f8; background:#EAF4FC; }
+.room-card.room-state-out-of-service { --room-accent:#63707d; --room-border:#d4dbe1; --room-icon-bg:#dce2e7; background:#EEF0F2; }
+.room-card[class*="room-state-"] { border-color:var(--room-border); transition:background-color .2s,border-color .2s; }
+.room-card[class*="room-state-"] .room-icon { color:var(--room-accent); background:var(--room-icon-bg); }
+.room-card[class*="room-state-"] h3 { color:#243c33; }
+.room-card[class*="room-state-"] p { color:#657467; }
+.room-card[class*="room-state-"] .room-card-bottom { border-color:var(--room-border); color:#637266; }
+.room-card[class*="room-state-"] .room-card-bottom select { background:#ffffffd9; color:#314337; border:1px solid var(--room-border); border-radius:5px; }
+.room-card[class*="room-state-"] .badge.status-sucia { background:#f5e8ac; color:#775b1b; }
+.room-card[class*="room-state-"] .badge.status-en_limpieza { background:#ffe1bb; color:#87521f; }
+.room-card[class*="room-state-"] .badge.status-inspeccion { background:#d3e9f8; color:#355f7c; }
+.room-card[class*="room-state-"] .room-occupancy.occupied { background:#f7dcd5; border-color:#e8beb5; color:#874b42; }
+.room-card.room-state-overdue .room-occupancy.occupied { background:#9b3e34; border-color:#9b3e34; color:#fff; }
+.room-overdue-badge { display:inline-flex; align-items:center; padding:4px 9px; border-radius:999px; background:#8f342d; color:#fff; font-size:10px; font-weight:700; white-space:nowrap; }
+.reservation-statuses { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.reservation-overdue { display:inline-flex; align-items:center; border-radius:999px; padding:5px 10px; background:#8f342d; color:#fff; font-size:10px; font-weight:700; white-space:nowrap; }
+.checkout-review-list { max-height:210px; overflow-y:auto; }
+.checkout-review-list .sale-detail-item { grid-template-columns:minmax(0,1fr) auto; }
+.checkout-balance-note { margin:16px 0 0; color:#a34e48; font-size:12px; font-weight:700; }
+@media(max-width:760px) { .room-statuses { flex-direction:column; align-items:flex-end; } }

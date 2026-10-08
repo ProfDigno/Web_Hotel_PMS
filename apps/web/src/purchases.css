@@ -1,0 +1,14 @@
+.purchase-modal{width:min(900px,95vw);max-height:90vh;overflow:auto}
+.purchase-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-bottom:14px}
+.purchase-state-filter{max-width:210px;margin:0 0 14px}
+.purchase-lines{margin:20px 0;padding:16px;border:1px solid #e4e9e3;border-radius:10px}
+.purchase-lines h3,.purchase-modal h3{margin:8px 0 14px}
+.purchase-line{display:grid;grid-template-columns:minmax(170px,2fr) minmax(90px,.7fr) minmax(130px,1fr) auto;gap:10px;align-items:end;margin-bottom:12px}
+.purchase-line .small-button{margin-bottom:2px}
+.purchase-total{display:flex;justify-content:flex-end;gap:12px;font-size:17px;margin:12px 0 20px}
+.purchase-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:20px}
+.purchase-facts span{padding:11px;background:#f5f8f4;border-radius:8px}
+.purchase-action{margin-top:16px;padding:16px;border:1px solid #e4e9e3;border-radius:10px}
+.purchase-action .primary-button{margin-top:12px}
+.purchase-annulled{padding:12px;background:#f8efec;border-radius:8px}
+@media(max-width:700px){.purchase-line{grid-template-columns:1fr 1fr}.purchase-line .field:first-child{grid-column:1/-1}}

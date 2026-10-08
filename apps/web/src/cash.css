@@ -1,0 +1,30 @@
+.cash-detail-toolbar { flex-wrap:wrap; padding:20px 23px; margin-bottom:0; }
+.cash-detail-toolbar .field { margin:0; max-width:100%; }
+.cash-detail-totals { display:flex; flex-wrap:wrap; gap:16px 28px; padding:16px 23px; background:#f7f9f5; border-top:1px solid #edf0e9; }
+.cash-detail-totals span { font-size:11px; color:#718276; }
+.cash-detail-totals b { display:block; font-size:16px; color:#315849; margin-top:5px; }
+.cash-close-info { padding:14px 23px; background:#fff8ef; }
+.cash-close-info p { font-size:12px; margin:5px 0; }
+.cash-annul-note { display:block; font-size:10px; margin-top:5px; min-width:150px; }
+.cash-movements-table { min-width:680px; }
+.cash-movements-table th:nth-child(2),.cash-movements-table td:nth-child(2) { width:36%; }
+.cash-concept { display:grid; gap:4px; min-width:180px; max-width:440px; overflow-wrap:anywhere; }
+.cash-concept small { color:#7b8d80; font-size:11px; line-height:1.4; }
+@media(max-width:700px){.cash-movements-table th,.cash-movements-table td{padding:12px 14px}.cash-concept{min-width:155px}}
+.cash-history-table .cash-history-selected td { background:#eaf3ee; }
+.cash-history-table .cash-history-selected td:first-child { box-shadow:inset 3px 0 #315849; }
+.cash-history-table button[aria-pressed="true"] { background:#315849; color:white; }
+.cash-history-table td { white-space:nowrap; }
+.cash-close-info p { overflow-wrap:anywhere; }
+.cash-close-modal { max-width:620px; }
+.cash-count-list { display:grid; gap:8px; margin:18px 0; }
+.cash-count-row { display:grid; grid-template-columns:1fr 120px 1fr; align-items:center; gap:12px; padding:8px 12px; border:1px solid #e5e9e1; border-radius:9px; }
+.cash-count-row label { font-size:13px; font-weight:700; }
+.cash-count-row input { width:100%; padding:9px; border:1px solid #d9dfd7; border-radius:7px; text-align:center; }
+.cash-count-row strong { text-align:right; font-size:13px; }
+.cash-count-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:18px 0; }
+.cash-count-summary div { background:#f4f7f2; border-radius:9px; padding:12px; }
+.cash-count-summary span { display:block; color:#718276; font-size:11px; }
+.cash-count-summary b { display:block; margin-top:5px; font-size:17px; color:#315849; }
+.cash-close-success { color:#315849; font-weight:700; }
+@media(max-width:550px){.cash-count-row{grid-template-columns:1fr 90px;gap:8px}.cash-count-row strong{grid-column:1/-1}.cash-count-summary{grid-template-columns:1fr}}

@@ -1,0 +1,1 @@
+ALTER TABLE caja ADD COLUMN IF NOT EXISTS cierre_comprobante JSONB;

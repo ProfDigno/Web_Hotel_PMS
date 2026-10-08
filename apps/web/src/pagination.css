@@ -1,0 +1,7 @@
+.table-pagination { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; padding:18px 23px; border-top:1px solid #eff1ed; }
+.table-pagination>span { color:#718276; font-size:12px; }
+@media(max-width:600px) {
+  .table-pagination { padding:16px; }
+  .table-pagination .button-group { width:100%; }
+  .table-pagination .button-group button { flex:1; }
+}

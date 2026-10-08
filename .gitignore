@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+config/sifen.params.json
+coverage/
+*.tsbuildinfo
+apps/web/public/assets/
+apps/web/src/assets/
+apps/web/src/legacy-app.js
+apps/web/src/legacy-app.d.ts
+apps/web/src/App.corrupt.txt
+*.bak
+servidor2.txt

@@ -1,0 +1,3 @@
+ALTER TABLE reserva
+  ADD COLUMN IF NOT EXISTS fecha_checkout TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS checkout_resumen JSONB;

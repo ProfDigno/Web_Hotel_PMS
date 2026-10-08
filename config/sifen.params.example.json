@@ -1,0 +1,23 @@
+{
+  "version": 150,
+  "ruc": "RUC-CON-DV",
+  "razonSocial": "RAZON SOCIAL DEL HOTEL",
+  "nombreFantasia": "NOMBRE DEL HOTEL",
+  "actividadesEconomicas": [{ "codigo": "CODIGO-DNIT", "descripcion": "ACTIVIDAD HABILITADA" }],
+  "timbradoNumero": "NUMERO-TIMBRADO",
+  "timbradoFecha": "2026-01-01",
+  "tipoContribuyente": 2,
+  "establecimientos": [{
+    "codigo": "001",
+    "direccion": "DIRECCION DEL HOTEL",
+    "numeroCasa": "0",
+    "departamento": 0,
+    "departamentoDescripcion": "DEPARTAMENTO",
+    "distrito": 0,
+    "distritoDescripcion": "DISTRITO",
+    "ciudad": 0,
+    "ciudadDescripcion": "CIUDAD",
+    "telefono": "TELEFONO",
+    "email": "correo@hotel.example"
+  }]
+}
