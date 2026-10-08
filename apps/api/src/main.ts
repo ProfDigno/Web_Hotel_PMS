@@ -39,7 +39,8 @@ async function main() {
       res.sendFile(resolve(dist, 'index.html'));
     });
   }
-  await app.listen(port, '0.0.0.0');
-  console.log(`PMS: http://localhost:${port} · API: http://localhost:${port}/api`);
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(port, host);
+  console.log(`PMS: http://${host}:${port} · API: http://${host}:${port}/api`);
 }
 main().catch(error => { console.error(error); process.exit(1); });
