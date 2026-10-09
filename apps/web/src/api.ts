@@ -12,7 +12,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
     catch(error){if(error instanceof Error&&error.name==='TimeoutError')throw new Error('La solicitud tardó demasiado. Podés volver a intentar sin duplicar el registro.');throw new Error('No se pudo conectar con la API. Revisá que esté iniciada.');}
     if(response.status===401&&!path.includes('/auth/login')){localStorage.removeItem('pms_token');location.reload();}
     const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.message?(Array.isArray(data.message)?data.message.join(', '):data.message):`Error ${response.status}`);
+    if(!response.ok){if(response.status===403)window.dispatchEvent(new Event('pms-permissions-changed'));if(response.status===409&&data.code==='CAJA_CERRADA')window.dispatchEvent(new Event('pms-cash-changed'));throw new Error(data.message?(Array.isArray(data.message)?data.message.join(', '):data.message):`Error ${response.status}`)}
     return data as T;
   };
   if(['POST','PUT','PATCH','DELETE'].includes(method)&&!path.includes('/auth/login')){

@@ -3,7 +3,7 @@ import { api, gs } from './api';
 import { CashFixed } from './CashFixed';
 import { openCashTicket } from './CashTicket';
 
-type CashProps = { refresh:number; run:any };
+type CashProps = { refresh:number; run:any; onClosed?:()=>void; onReceiptDone?:()=>void };
 const timestamp=(value:string)=>new Intl.DateTimeFormat('es-PY',{timeZone:'America/Asuncion',dateStyle:'short',timeStyle:'short'}).format(new Date(value));
 
 function useLoad<T>(path:string|null,refresh:number) {
@@ -67,11 +67,11 @@ function CashDetail({id,refresh,run}:{id:string}&CashProps) {
   </section>;
 }
 
-export function CashCurrent({refresh,run}:CashProps) {
+export function CashCurrent({refresh,run,onClosed,onReceiptDone}:CashProps) {
   const [localRefresh,setLocalRefresh]=useState(0);
   const {data:caja,error,loading}=useLoad<any>('/caja',refresh+localRefresh);
   return <>
-    <CashFixed caja={caja} loading={loading} error={error} run={run} onClosed={()=>setLocalRefresh(n=>n+1)}/>
+    <CashFixed caja={caja} loading={loading} error={error} run={run} onClosed={()=>{setLocalRefresh(n=>n+1);onClosed?.()}} onReceiptDone={onReceiptDone}/>
     {caja?.idcaja&&<CashDetail key={String(caja.idcaja)} id={String(caja.idcaja)} refresh={refresh+localRefresh} run={run}/>}
   </>;
 }

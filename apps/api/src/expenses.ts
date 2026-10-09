@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { AuthGuard, Roles } from './auth';
+import { AuthGuard } from './auth';
 import { query, transaction } from './db';
 import { allowed, dbError, hotelDate, one, positiveInt, required } from './common';
 import { paginateList } from './pagination';
@@ -19,17 +19,17 @@ function filters(q:any,analysis=false){
   if(!analysis){values.push(q.estado?allowed(q.estado,['vigente','anulado','todos'],'estado'):'todos',q.q?required(q.q,'búsqueda'):null);where+=" AND ($5='todos' OR g.anulado=($5='anulado')) AND ($6::text IS NULL OR g.descripcion ILIKE '%'||$6||'%')";}
   return {desde,hasta,values,where};
 }
-@Controller('api') @UseGuards(AuthGuard) @Roles('administracion','caja')
+@Controller('api') @UseGuards(AuthGuard)
 export class ExpensesController {
   @Get('gastos-tipos') async types(@Query('todos') all?:string){return (await query(`SELECT * FROM gasto_tipo ${all==='1'?'':'WHERE activo'} ORDER BY nombre`)).rows;}
-  @Post('gastos-tipos') @Roles('administracion') async createType(@Body() b:any,@Req() req:any){
+  @Post('gastos-tipos') async createType(@Body() b:any,@Req() req:any){
     try{return await transaction(async tx=>{const row=(await tx.query('INSERT INTO gasto_tipo(nombre,activo,creado_por) VALUES($1,$2,$3) RETURNING *',[required(b.nombre,'Nombre'),b.activo===undefined?true:active(b.activo),req.user.nombre])).rows[0];await audit(tx,req.user,'crear','gasto_tipo',row.idgasto_tipo);return row;});}catch(e){dbError(e);}
   }
-  @Patch('gastos-tipos/:id') @Roles('administracion') async updateType(@Param('id') id:string,@Body() b:any,@Req() req:any){
+  @Patch('gastos-tipos/:id') async updateType(@Param('id') id:string,@Body() b:any,@Req() req:any){
     try{return await transaction(async tx=>{const old=one((await tx.query('SELECT * FROM gasto_tipo WHERE idgasto_tipo=$1 FOR UPDATE',[positiveInt(id,'tipo')])).rows,'Tipo de gasto');const row=(await tx.query('UPDATE gasto_tipo SET nombre=$1,activo=$2 WHERE idgasto_tipo=$3 RETURNING *',[b.nombre===undefined?old.nombre:required(b.nombre,'Nombre'),b.activo===undefined?old.activo:active(b.activo),id])).rows[0];await audit(tx,req.user,'editar','gasto_tipo',id,{antes:old,despues:row});return row;});}catch(e){dbError(e);}
   }
   @Get('gastos/opciones') async options(){return {tipos:await this.types('1'),formas_pago:(await query('SELECT idforma_pago,nombre,activo FROM forma_pago ORDER BY nombre')).rows};}
-  @Get('gastos/analisis') @Roles('administracion') async analysis(@Query() q:any){
+  @Get('gastos/analisis') async analysis(@Query() q:any){
     const f=filters(q,true);
     const days=Math.round((Date.parse(f.hasta!)-Date.parse(f.desde!))/86400000)+1;
     if(days>3660)throw new BadRequestException('Seleccioná un período de hasta 10 años');

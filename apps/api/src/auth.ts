@@ -1,12 +1,12 @@
-import { Body, Controller, CanActivate, ExecutionContext, Get, Injectable, Patch, Post, Req, SetMetadata, UnauthorizedException, ForbiddenException, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, CanActivate, ConflictException, ExecutionContext, Get, Injectable, Patch, Post, Req, UnauthorizedException, ForbiddenException, UseGuards, BadRequestException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
 import { query } from './db';
 import { required } from './common';
+import { ROUTE_EVENTS } from './permission-catalog';
 
 export type Actor = { idusuario: string; nombre: string; email: string; rol: 'administracion'|'recepcion'|'caja'|'limpieza' };
-export const Roles = (...roles: Actor['rol'][]) => SetMetadata('roles', roles);
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -24,8 +24,19 @@ export class AuthGuard implements CanActivate {
     const user = (await query<Actor>('SELECT idusuario,nombre,email,rol FROM usuario WHERE idusuario=$1 AND activo', [payload.sub])).rows[0];
     if (!user) throw new UnauthorizedException('Usuario inactivo');
     req.user = user;
-    const roles = this.reflector.getAllAndOverride<Actor['rol'][]>('roles', [context.getHandler(), context.getClass()]);
-    if (roles?.length && !roles.includes(user.rol)) throw new ForbiddenException('Sin permiso para esta operación');
+    const controller=context.getClass().name,handler=context.getHandler().name;
+    // Every signed-in user can check the shift and open its cash box.
+    if(controller==='PmsController'&&(handler==='cashStatus'||handler==='openCash'))return true;
+    if(['POST','PUT','PATCH','DELETE'].includes(String(req.method||'GET').toUpperCase())){
+      const opened=(await query<{abierta:boolean}>('SELECT EXISTS(SELECT 1 FROM caja WHERE activo AND cerrada_en IS NULL) AS abierta')).rows[0].abierta;
+      if(!opened)throw new ConflictException({statusCode:409,code:'CAJA_CERRADA',message:'Abrí una caja antes de continuar'});
+    }
+    if(controller==='AuthController'||controller==='PermissionsController')return true;
+    const requiredEvents=ROUTE_EVENTS[controller]?.[handler];
+    if(!requiredEvents)throw new ForbiddenException('Evento de acceso no configurado');
+    const grants=(await query<{evento:string}>('SELECT evento FROM rol_evento WHERE rol=$1 AND habilitado AND evento=ANY($2::text[])',[user.rol,requiredEvents])).rows;
+    if(!grants.length)throw new ForbiddenException('Sin permiso para esta operación');
+    req.events=new Set(grants.map(row=>row.evento));
     return true;
   }
 }

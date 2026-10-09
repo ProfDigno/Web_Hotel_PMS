@@ -8,7 +8,7 @@ import xmlsign from 'facturacionelectronicapy-xmlsign';
 import qrgen from 'facturacionelectronicapy-qrgen';
 import setapi from 'facturacionelectronicapy-setapi';
 import { query, transaction } from './db';
-import { Actor, AuthGuard, Roles } from './auth';
+import { Actor, AuthGuard } from './auth';
 import { one, positiveInt } from './common';
 import { cdcOf, responseState, safeNumber } from './sifen';
 
@@ -48,9 +48,9 @@ function makeData(doc:any, snapshot:FiscalData, issuer:any) {
   };
 }
 
-@Controller('api/facturas') @UseGuards(AuthGuard) @Roles('administracion','caja')
+@Controller('api/facturas') @UseGuards(AuthGuard)
 export class FiscalController {
-  @Get() @Roles('administracion','recepcion','caja') async list() { return (await query('SELECT iddocumento_electronico,fk_idreserva,tipo,estado,cdc,numero,total_gs,codigo_respuesta,mensaje_respuesta,fecha_creado FROM documento_electronico WHERE activo ORDER BY iddocumento_electronico DESC LIMIT 300')).rows; }
+  @Get() async list() { return (await query('SELECT iddocumento_electronico,fk_idreserva,tipo,estado,cdc,numero,total_gs,codigo_respuesta,mensaje_respuesta,fecha_creado FROM documento_electronico WHERE activo ORDER BY iddocumento_electronico DESC LIMIT 300')).rows; }
   @Post() async prepare(@Body() body:any,@Req() req:any) {
     const id=positiveInt(body.fk_idreserva,'reserva'),u=req.user as Actor;
     try { return await transaction(async tx=>{
@@ -71,7 +71,7 @@ export class FiscalController {
       return {...row,numero:number};
     }); } catch(e:any) { if(e.code==='23505') throw new ConflictException('Esta reserva ya tiene una factura'); throw e; }
   }
-  @Get(':id') @Roles('administracion','recepcion','caja') async detail(@Param('id') id:string){ return one((await query('SELECT * FROM documento_electronico WHERE iddocumento_electronico=$1 AND activo',[id])).rows,'Documento'); }
+  @Get(':id') async detail(@Param('id') id:string){ return one((await query('SELECT * FROM documento_electronico WHERE iddocumento_electronico=$1 AND activo',[id])).rows,'Documento'); }
   @Post(':id/emitir') async issue(@Param('id') id:string,@Req() req:any) {
     const u=req.user as Actor, cred=credentials(),issuer=params();
     const doc=one((await query('SELECT * FROM documento_electronico WHERE iddocumento_electronico=$1 AND activo',[id])).rows,'Documento');
@@ -130,7 +130,7 @@ export class FiscalController {
     await query('UPDATE documento_electronico SET numero=$1 WHERE iddocumento_electronico=$2',[number,row.iddocumento_electronico]);
     return {...row,numero:number};
   }
-  @Get(':id/kude') @Roles('administracion','recepcion','caja') async kude(@Param('id') id:string,@Res() res:any) {
+  @Get(':id/kude') async kude(@Param('id') id:string,@Res() res:any) {
     const doc=one((await query('SELECT * FROM documento_electronico WHERE iddocumento_electronico=$1 AND activo',[id])).rows,'Documento');
     if(doc.estado!=='aprobado'||!doc.xml_firmado) throw new BadRequestException('KuDE disponible solo para documentos aprobados');
     const s=doc.datos as FiscalData;

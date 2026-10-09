@@ -1,0 +1,10 @@
+.cash-opening-page{min-height:100vh;background:#f7f6f2;padding:25px clamp(16px,4vw,48px)}
+.cash-opening-top{display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1050px;margin:0 auto}
+.cash-opening-top strong{font-family:'Playfair Display',serif;color:#244839;font-size:21px}
+.cash-opening-card{width:min(100%,530px);margin:clamp(50px,12vh,125px) auto 0;padding:32px}
+.cash-opening-icon{display:grid;place-items:center;width:47px;height:47px;border-radius:12px;background:#f6ebe2;color:#b97550;margin-bottom:26px}
+.cash-opening-card h1{margin:12px 0 7px}
+.cash-opening-card p{font-size:13px;margin-bottom:26px}
+.cash-opening-card .field{margin-bottom:15px}
+.cash-opening-card .primary-button{width:100%}
+@media(max-width:550px){.cash-opening-card{padding:24px;margin-top:70px}}

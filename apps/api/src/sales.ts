@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query as Q, Req, Res, UseGuards } from '@nestjs/common';
 import { query, transaction } from './db';
-import { Actor, AuthGuard, Roles } from './auth';
+import { Actor, AuthGuard } from './auth';
 import { allowed, dbError, hotelDate, isoDate, nonNegativeGs, one, positiveInt, required } from './common';
 import { paginateList } from './pagination';
 import { createSaleTicket } from './sales-ticket';
@@ -17,7 +17,7 @@ const stockChange=async(tx:any,product:any,delta:number,type:string,motive:strin
   product.stock_actual=after;
 };
 
-@Controller('api/ventas') @UseGuards(AuthGuard) @Roles('administracion','recepcion','caja')
+@Controller('api/ventas') @UseGuards(AuthGuard)
 export class SalesController {
   @Get('categorias') async categories(@Q('admin') admin?:string) {
     return (await query(`SELECT * FROM categoria_producto ${admin==='1'?'':'WHERE activo'} ORDER BY orden,idcategoria_producto`)).rows;
@@ -222,7 +222,7 @@ export class SalesController {
       await audit(tx,u,'crear','venta',sale.idventa);return sale;
     });}catch(e){dbError(e);}
   }
-  @Post(':id/anular') @Roles('administracion','caja') async annul(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Post(':id/anular') async annul(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req),motive=required(b.motivo,'motivo de anulación');
     return transaction(async tx=>{
       one((await tx.query('SELECT idventa FROM venta WHERE idventa=$1',[positiveInt(id,'venta')])).rows,'Venta');

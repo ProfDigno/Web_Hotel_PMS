@@ -1,12 +1,12 @@
 {
   "name": "@hotel/api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "tsx watch --exclude \"../web/**\" --env-file=../../.env.dev src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "test": "node --import tsx --test --test-concurrency=1 src/sifen.test.ts src/database.test.ts src/cash.test.ts src/rooms.test.ts src/guests.test.ts src/sales.test.ts src/room-analysis.test.ts src/idempotency.test.ts src/expenses.test.ts src/purchases.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 src/sifen.test.ts src/database.test.ts src/cash.test.ts src/cash-gate.test.ts src/rooms.test.ts src/guests.test.ts src/sales.test.ts src/room-analysis.test.ts src/idempotency.test.ts src/expenses.test.ts src/purchases.test.ts src/permissions.test.ts",
     "db:migrate": "tsx src/migrate.ts",
     "admin:create": "tsx src/seed-admin.ts"
   },

@@ -15,7 +15,7 @@ try{
   await client.query(`CREATE DATABASE "${testName}"`);created=true;
   const testUrl=new URL(source);testUrl.pathname=`/${testName}`;
   const tests=process.argv.slice(2);
-  const files=tests.length?tests:['src/sifen.test.ts','src/database.test.ts','src/cash.test.ts','src/rooms.test.ts','src/guests.test.ts','src/sales.test.ts','src/room-analysis.test.ts','src/idempotency.test.ts','src/expenses.test.ts','src/purchases.test.ts'];
+  const files=tests.length?tests:['src/sifen.test.ts','src/database.test.ts','src/cash.test.ts','src/cash-gate.test.ts','src/rooms.test.ts','src/guests.test.ts','src/sales.test.ts','src/room-analysis.test.ts','src/idempotency.test.ts','src/expenses.test.ts','src/purchases.test.ts','src/permissions.test.ts'];
   const code=await new Promise((ok,fail)=>{
     const child=spawn(process.execPath,['--import','tsx','--test','--test-concurrency=1',...files],{cwd:apiRoot,stdio:'inherit',env:{...process.env,TEST_DATABASE_URL:testUrl.toString()}});
     child.on('error',fail);child.on('exit',ok);

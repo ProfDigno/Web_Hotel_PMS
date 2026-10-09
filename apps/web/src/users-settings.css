@@ -1,0 +1,11 @@
+.users-table .user-name-cell{display:flex;align-items:center;gap:11px;min-width:180px}
+.users-table .user-name-cell strong{font-weight:700}
+.users-table td:nth-child(2){color:#617269;overflow-wrap:anywhere}
+.users-table td:last-child{white-space:nowrap}
+.users-table .row-avatar,.user-edit-summary .row-avatar{width:32px;height:32px}
+.user-self-label{font-size:11px;color:#8a978d}
+.user-edit-summary{display:flex;align-items:center;gap:12px;margin-bottom:22px;padding:13px 15px;border-radius:10px;background:#f7f8f4}
+.user-edit-summary strong,.user-edit-summary small{display:block}
+.user-edit-summary strong{font-size:13px;color:#263f34}
+.user-edit-summary small{font-size:11px;color:#82918b;margin-top:3px;overflow-wrap:anywhere}
+@media(max-width:760px){.users-table{min-width:650px}}

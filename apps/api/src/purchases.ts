@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query as Q, Req, UseGuards } from '@nestjs/common';
-import { AuthGuard, Roles } from './auth';
+import { AuthGuard } from './auth';
 import { query, transaction } from './db';
 import { allowed, dbError, hotelDate, isoDate, nonNegativeGs, one, positiveInt, required } from './common';
 import { paginateList } from './pagination';
@@ -14,13 +14,13 @@ const purchaseSelect=`SELECT c.*,p.razon_social AS proveedor_nombre,p.ruc AS pro
   (c.total_gs-COALESCE((SELECT SUM(cp.monto_gs) FROM compra_pago cp WHERE cp.fk_idcompra=c.idcompra AND cp.activo AND NOT cp.anulado),0))::text AS saldo_gs
   FROM compra c JOIN proveedor p ON p.idproveedor=c.fk_idproveedor`;
 
-@Controller('api') @UseGuards(AuthGuard) @Roles('administracion','caja')
+@Controller('api') @UseGuards(AuthGuard)
 export class PurchasesController {
   @Get('proveedores') async suppliers(@Q('todos') todos?:string){return (await query(`${supplierSelect} ${todos==='1'?'':'WHERE activo'} ORDER BY razon_social,idproveedor`)).rows;}
-  @Post('proveedores') @Roles('administracion') async createSupplier(@Body() b:any,@Req() req:any){
+  @Post('proveedores') async createSupplier(@Body() b:any,@Req() req:any){
     try{return await transaction(async tx=>{const row=(await tx.query('INSERT INTO proveedor(razon_social,ruc,direccion,telefono,creado_por) VALUES($1,$2,$3,$4,$5) RETURNING *',[required(b.razon_social,'Razón social'),required(b.ruc,'RUC'),required(b.direccion,'Dirección'),required(b.telefono,'Teléfono'),req.user.nombre])).rows[0];await audit(tx,req.user,'crear','proveedor',row.idproveedor);return row;});}catch(e){dbError(e);}
   }
-  @Patch('proveedores/:id') @Roles('administracion') async updateSupplier(@Param('id') id:string,@Body() b:any,@Req() req:any){
+  @Patch('proveedores/:id') async updateSupplier(@Param('id') id:string,@Body() b:any,@Req() req:any){
     try{return await transaction(async tx=>{const old=one((await tx.query('SELECT * FROM proveedor WHERE idproveedor=$1 FOR UPDATE',[positiveInt(id,'proveedor')])).rows,'Proveedor');const row=(await tx.query('UPDATE proveedor SET razon_social=$1,ruc=$2,direccion=$3,telefono=$4,activo=$5 WHERE idproveedor=$6 RETURNING *',[b.razon_social===undefined?old.razon_social:required(b.razon_social,'Razón social'),b.ruc===undefined?old.ruc:required(b.ruc,'RUC'),b.direccion===undefined?old.direccion:required(b.direccion,'Dirección'),b.telefono===undefined?old.telefono:required(b.telefono,'Teléfono'),b.activo===undefined?old.activo:active(b.activo),id])).rows[0];await audit(tx,req.user,'editar','proveedor',id);return row;});}catch(e){dbError(e);}
   }
   @Get('compras/opciones') async options(){const [suppliers,products,methods]=await Promise.all([this.suppliers('1'),query('SELECT idproducto,nombre,precio_compra,stock_actual,activo,es_comprar FROM producto ORDER BY nombre'),query('SELECT idforma_pago,nombre,activo FROM forma_pago ORDER BY nombre')]);return {proveedores:suppliers,productos:products.rows,formas_pago:methods.rows};}
@@ -30,7 +30,7 @@ export class PurchasesController {
     const sql=purchaseSelect+` WHERE c.activo AND ($1::date IS NULL OR c.fecha_creado >= ($1::date::timestamp AT TIME ZONE 'America/Asuncion')) AND ($2::date IS NULL OR c.fecha_creado < (($2::date+1)::timestamp AT TIME ZONE 'America/Asuncion')) AND ($3::bigint IS NULL OR c.fk_idproveedor=$3) AND ($4='todos' OR c.anulado=($4='anulado'))`;
     return paginateList(sql,[start,end,supplier,state],q.pagina??'1','idcompra');
   }
-  @Get('compras/analisis') @Roles('administracion') async analysis(@Q() q:any){
+  @Get('compras/analisis') async analysis(@Q() q:any){
     const start=isoDate(q.desde||hotelDate().slice(0,7)+'-01','desde'),end=isoDate(q.hasta||hotelDate(),'hasta');if(end<start)throw new BadRequestException('La fecha hasta debe ser igual o posterior a la fecha desde');
     const days=Math.round((Date.parse(end)-Date.parse(start))/86400000)+1;if(days>3660)throw new BadRequestException('Seleccioná un período de hasta 10 años');
     const supplier=q.proveedor?positiveInt(q.proveedor,'proveedor'):null,product=q.producto?positiveInt(q.producto,'producto'):null,method=q.forma_pago?positiveInt(q.forma_pago,'forma de pago'):null;

@@ -18,7 +18,7 @@ test('ocupación de habitaciones: check-in, traslado, salida vencida y check-out
     db=await import('./db');const {PmsController}=await import('./pms');const {hotelDate}=await import('./common');const controller=new PmsController();
     const add=(day:string,n:number)=>{const d=new Date(`${day}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
     const today=hotelDate(),end=add(today,2);
-    const user=(await client.query("INSERT INTO usuario(nombre,email,clave_hash,rol,creado_por) VALUES('Prueba','rooms@test.local','hash','administracion','Prueba') RETURNING *")).rows[0];const req={user};
+    const user=(await client.query("INSERT INTO usuario(nombre,email,clave_hash,rol,creado_por) VALUES('Prueba','rooms@test.local','hash','administracion','Prueba') RETURNING *")).rows[0];const req={user,events:new Set(['reservations.financial_detail','rooms.form','housekeeping.form'])};
     const customer=(await client.query("INSERT INTO cliente(nombre,creado_por) VALUES('Ana','Prueba') RETURNING *")).rows[0];
     const floor=(await client.query("INSERT INTO piso(numero,nombre,creado_por) VALUES(1,'Primer piso','Prueba') RETURNING *")).rows[0];
     const type=(await client.query("INSERT INTO tipo_habitacion(nombre,capacidad,creado_por) VALUES('Doble',2,'Prueba') RETURNING *")).rows[0];

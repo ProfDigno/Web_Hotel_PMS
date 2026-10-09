@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Search, Users } from 'lucide-react';
 import { api } from './api';
 import { Pagination, type PageResult } from './Pagination';
+import { useCan } from './usePermissions';
 
 type Guest={idcliente:string;nombre:string;apellido:string|null;documento:string|null;ruc:string|null;telefono:string|null;email:string|null};
 type Reservation={idreserva:string;fecha_entrada:string;fecha_salida:string;habitaciones:string;estado:string};
@@ -27,6 +28,7 @@ function Empty({text}:{text:string}) {
 }
 
 export function Guests({refresh,onNew,openReservation,renderStatus}:Props) {
+  const can=useCan();
   const [search,setSearch]=useState(''),[selected,setSelected]=useState<Guest|null>(null),[page,setPage]=useState(1);
   const {data:response,error,loading}=useRequest<PageResult<Guest>>('/clientes?pagina='+page+(search?'&q='+encodeURIComponent(search):''),refresh);
   const pages=response?Math.max(1,Math.ceil(response.total/50)):1;
@@ -34,7 +36,7 @@ export function Guests({refresh,onNew,openReservation,renderStatus}:Props) {
   const correcting=Boolean(response&&page>pages),data=correcting?null:response?.registros;
   return <>
     <div className="page-head"><div><span className="eyebrow">HUÉSPEDES</span><h1>Huéspedes</h1><p>Información de las personas que se alojan en tu hotel.</p></div>
-      <button className="primary-button" onClick={onNew}><Plus size={18}/> Nuevo huésped</button>
+      {can('guests.form')&&<button className="primary-button" onClick={onNew}><Plus size={18}/> Nuevo huésped</button>}
     </div>
     <section className="card table-card" aria-busy={loading||correcting}>
       <div className="guest-table-head"><div className="searchbox"><Search size={18}/><input aria-label="Buscar huéspedes" value={search} onChange={e=>{setSearch(e.target.value);setPage(1)}} placeholder="Buscar por nombre o documento"/></div></div>
@@ -55,6 +57,7 @@ export function Guests({refresh,onNew,openReservation,renderStatus}:Props) {
 }
 
 function GuestHistory({guest,refresh,openReservation,renderStatus}:{guest:Guest}&Pick<Props,'refresh'|'openReservation'|'renderStatus'>) {
+  const can=useCan();
   const [page,setPage]=useState(1);
   const {data,error,loading}=useRequest<History>('/clientes/'+guest.idcliente+'/reservas?pagina='+page,refresh);
   const pages=data?Math.max(1,Math.ceil(data.total/data.por_pagina)):1;
@@ -68,7 +71,7 @@ function GuestHistory({guest,refresh,openReservation,renderStatus}:{guest:Guest}
         <thead><tr><th>Reserva</th><th>Entrada</th><th>Salida</th><th>Habitaciones</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody>{data.reservas.map(r=><tr key={r.idreserva}>
           <td><b>#{r.idreserva}</b></td><td>{r.fecha_entrada}</td><td>{r.fecha_salida}</td><td>{r.habitaciones||'Sin habitación'}</td><td>{renderStatus(r.estado)}</td>
-          <td><button className="small-button" onClick={()=>openReservation(String(r.idreserva))}>Ver detalle</button></td>
+          <td>{(can('reservations.financial_detail')||can('reservations.stay_detail'))&&<button className="small-button" onClick={()=>openReservation(String(r.idreserva))}>Ver detalle</button>}</td>
         </tr>)}</tbody>
       </table></div>
       {!data.total?<Empty text="Este huésped no tiene reservas registradas"/>:<div className="guest-history-pagination">

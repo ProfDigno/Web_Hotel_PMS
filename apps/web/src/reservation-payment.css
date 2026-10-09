@@ -1,6 +1,10 @@
-.payment-split-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:15px;align-items:end}
+.payment-split-form{display:grid;grid-template-columns:minmax(145px,170px) minmax(0,1fr);gap:10px;margin-top:15px;align-items:start}
 .payment-split-form .field{min-width:0;margin:0}
-.payment-split-form .small-button{justify-self:start}
+.payment-amount-field input{max-width:170px}
+.payment-amount-field small{display:block;margin-top:6px;color:#718276;font-size:11px}
+.payment-method-field .payment-method-buttons{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+.payment-method-field .payment-method-button{flex:1 0 auto;min-width:95px;padding:9px 5px;font-size:11px;white-space:nowrap}
+.payment-split-form .small-button{justify-self:start;grid-column:1/-1}
 .payment-split-error{grid-column:1/-1;color:#a34d40;font-size:12px}
 .payment-balance-note{margin:15px 0 0;color:#718276;font-size:13px}
 .payment-result-backdrop{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:20px;background:#14251bbb}
@@ -16,7 +20,7 @@
 .payment-result-icon.is-error{background:#fae8e5;color:#ad5e4d}
 @keyframes payment-result-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.payment-result-spinner{animation-duration:2s}}
-@media(max-width:550px){.payment-split-form{grid-template-columns:1fr}}
+@media(max-width:550px){.payment-split-form{grid-template-columns:1fr}.payment-method-field .payment-method-buttons{flex-wrap:wrap;overflow-x:visible}.payment-method-field .payment-method-button{flex:1 1 100px}}
 .detail-actions .checkin-button{background:#3f8a5b;border-color:#3f8a5b;color:#fff}
 .detail-actions .checkin-button:hover{background:#327148;border-color:#327148}
 .detail-actions .checkout-button{background:#b97550;border-color:#b97550;color:#fff}

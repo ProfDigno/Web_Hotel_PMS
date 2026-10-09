@@ -65,7 +65,7 @@ test('caja detalle: migración, transacciones, anulación y cierre concurrente',
       for(const column of ['id'+table,'fecha_creado','creado_por','activo'])assert.ok(columns.includes(column));
     }
     const url=new URL(process.env.TEST_DATABASE_URL!);url.searchParams.set('options',`-c search_path=${schema},public`);process.env.DATABASE_URL=url.toString();
-    db=await import('./db');const {PmsController}=await import('./pms');const controller=new PmsController();const req={user:{idusuario:user.idusuario,nombre:user.nombre,rol:'administracion'}};
+    db=await import('./db');const {PmsController}=await import('./pms');const controller=new PmsController();const req={user:{idusuario:user.idusuario,nombre:user.nombre,rol:'administracion'},events:new Set(['reservations.financial_detail'])};
     const {AuthGuard}=await import('./auth');const {JwtService}=await import('@nestjs/jwt');const {Reflector}=await import('@nestjs/core');
     const jwt=new JwtService({secret:'cash-test-secret'}),guard=new AuthGuard(jwt,new Reflector());
     for(const role of ['administracion','caja','recepcion','limpieza']){
@@ -108,7 +108,7 @@ test('caja detalle: migración, transacciones, anulación y cierre concurrente',
       const request={headers:{authorization:'Bearer '+await jwt.signAsync({sub:roleUser.idusuario})}};
       for(const handler of [controller.paymentMethods,controller.paymentMethodsAdmin,controller.createPaymentMethod,controller.updatePaymentMethod]){
         const ctx={switchToHttp:()=>({getRequest:()=>request}),getHandler:()=>handler,getClass:()=>PmsController} as any;
-        const permitted=handler===controller.paymentMethods?['administracion','caja'].includes(role):role==='administracion';
+        const permitted=handler===controller.paymentMethods?['administracion','caja','recepcion'].includes(role):role==='administracion';
         if(permitted)assert.equal(await guard.canActivate(ctx),true);else await assert.rejects(()=>guard.canActivate(ctx));
       }
     }

@@ -13,13 +13,30 @@ function useMethods(path:string,refresh:number) {
   return {data,error,loading};
 }
 
-export function PaymentMethodSelect({value,onChange,refresh}:{value:string;onChange:(id:string)=>void;refresh:number}) {
+export function PaymentMethodButtons({value,onChange,refresh}:{value:string;onChange:(id:string)=>void;refresh:number}) {
   const {data,error,loading}=useMethods('/formas-pago',refresh);
-  useEffect(()=>{if(data&&!loading&&value&&!data.some(f=>String(f.idforma_pago)===value))onChange('')},[data,loading,value]);
-  return <><select required aria-label="Forma de pago" disabled={loading||Boolean(error)||!data?.length} value={value} onChange={e=>onChange(e.target.value)}>
-    <option value="">{loading?'Cargando formas de pago…':'Seleccionar forma de pago'}</option>
-    {data?.map(f=><option key={f.idforma_pago} value={f.idforma_pago}>{f.nombre}</option>)}
-  </select>{error&&<span className="form-error" role="alert">{error}</span>}{!loading&&!error&&!data?.length&&<span>No hay formas de pago activas.</span>}</>;
+  useEffect(()=>{
+    if(!data||loading||data.some(method=>String(method.idforma_pago)===value))return;
+    const cash=data.find(method=>method.es_efectivo&&method.nombre.trim().toLocaleLowerCase('es')==='efectivo')
+      ??data.find(method=>method.es_efectivo);
+    if(cash)onChange(String(cash.idforma_pago));
+    else if(value)onChange('');
+  },[data,loading,value,onChange]);
+  return <>
+    <div className="payment-method-buttons" role="group" aria-label="Forma de pago">
+      {data?.map(method=><button type="button" key={method.idforma_pago} className={`payment-method-button${String(method.idforma_pago)===value?' selected':''}`} aria-pressed={String(method.idforma_pago)===value} disabled={loading||Boolean(error)} onClick={()=>onChange(String(method.idforma_pago))}>{method.nombre}</button>)}
+    </div>
+    {loading&&<span>Cargando formas de pago…</span>}
+    {error&&<span className="form-error" role="alert">{error}</span>}
+    {!loading&&!error&&!data?.length&&<span>No hay formas de pago activas.</span>}
+  </>;
+}
+
+export function PaymentMethodFilterButtons({value,onChange,options,allLabel='Todas'}:{value:string;onChange:(id:string)=>void;options:{idforma_pago:string;nombre:string;activo?:boolean}[]|undefined;allLabel?:string}) {
+  return <div className="payment-method-buttons payment-method-filter-buttons" role="group" aria-label="Filtrar por forma de pago">
+    <button type="button" className={`payment-method-button${value===''?' selected':''}`} aria-pressed={value===''} onClick={()=>onChange('')}>{allLabel}</button>
+    {options?.map(method=><button type="button" key={method.idforma_pago} className={`payment-method-button${String(method.idforma_pago)===value?' selected':''}`} aria-pressed={String(method.idforma_pago)===value} onClick={()=>onChange(String(method.idforma_pago))}>{method.nombre}{method.activo===false?' (inactiva)':''}</button>)}
+  </div>;
 }
 
 export function PaymentMethods({refresh,run}:{refresh:number;run:any}) {

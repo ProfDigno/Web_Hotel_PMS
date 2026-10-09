@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { Module, ValidationPipe } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController, AuthGuard } from './auth';
+import { PermissionsController } from './permissions';
 import { PmsController } from './pms';
 import { FiscalController } from './fiscal';
 import { ExpensesController } from './expenses';
@@ -14,7 +15,7 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { IdempotencyInterceptor } from './idempotency';
 
-@Module({ imports: [JwtModule.register({ secret: process.env.JWT_SECRET || 'development-only-change-me', signOptions: { expiresIn: '12h' } })], controllers: [AuthController, PmsController, FiscalController, SalesController, ExpensesController, PurchasesController], providers: [AuthGuard] })
+@Module({ imports: [JwtModule.register({ secret: process.env.JWT_SECRET || 'development-only-change-me', signOptions: { expiresIn: '12h' } })], controllers: [AuthController, PermissionsController, PmsController, FiscalController, SalesController, ExpensesController, PurchasesController], providers: [AuthGuard] })
 class AppModule {}
 
 async function main() {

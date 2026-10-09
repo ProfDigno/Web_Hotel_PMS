@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Put, Query as Q, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Put, Query as Q, Req, Res, UseGuards } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { pool, query, transaction } from './db';
-import { Actor, AuthGuard, Roles } from './auth';
+import { Actor, AuthGuard } from './auth';
 import { paginateList } from './pagination';
 import { allowed, assertDateRange, dbError, hotelDate, isoDate, nonNegativeGs, one, positiveInt, required, timeHHMM } from './common';
 import { createCheckoutTicket } from './checkout-ticket';
@@ -18,7 +18,7 @@ const audit = async (entity: string, id: unknown, action: string, user: Actor, d
 @Controller('api') @UseGuards(AuthGuard)
 export class PmsController {
   @Get('hotel') async hotel() { return (await query('SELECT * FROM hotel WHERE activo ORDER BY idhotel LIMIT 1')).rows[0] || null; }
-  @Put('hotel') @Roles('administracion') async saveHotel(@Body() b: any, @Req() req: any) {
+  @Put('hotel') async saveHotel(@Body() b: any, @Req() req: any) {
     const u = actor(req), nombre = required(b.nombre,'nombre');
     const cols = ['nombre','ruc','razon_social','direccion','telefono','establecimiento','punto_expedicion','timbrado','actividad_economica','departamento_codigo','distrito_codigo','ciudad_codigo','email'];
     const vals = cols.map(c => c === 'nombre' ? nombre : (b[c] || null));
@@ -28,27 +28,38 @@ export class PmsController {
     await audit('hotel',row.idhotel,'guardar',u); return row;
   }
 
-  @Get('usuarios') @Roles('administracion') async users() { return (await query('SELECT idusuario,nombre,email,rol,activo,fecha_creado,creado_por FROM usuario ORDER BY nombre')).rows; }
-  @Post('usuarios') @Roles('administracion') async createUser(@Body() b: any, @Req() req: any) {
+  @Get('usuarios') async users() { return (await query('SELECT idusuario,nombre,email,rol,activo,fecha_creado,creado_por FROM usuario ORDER BY nombre')).rows; }
+  @Post('usuarios') async createUser(@Body() b: any, @Req() req: any) {
     const u=actor(req), rol=allowed(b.rol,['administracion','recepcion','caja','limpieza'] as const,'rol');
     const password=required(b.password,'contraseña'); if(password.length<10) throw new BadRequestException('La contraseña debe tener al menos 10 caracteres');
     const row=(await query('INSERT INTO usuario(nombre,email,clave_hash,rol,creado_por) VALUES($1,$2,$3,$4,$5) RETURNING idusuario,nombre,email,rol,activo', [required(b.nombre,'nombre'),required(b.email,'email').toLowerCase(),await bcrypt.hash(password,12),rol,u.nombre])).rows[0];
     await audit('usuario',row.idusuario,'crear',u); return row;
   }
-  @Patch('usuarios/:id') @Roles('administracion') async userState(@Param('id') id:string,@Body() b:any,@Req() req:any) {
-    const u=actor(req); if(String(id)===String(u.idusuario) && b.activo===false) throw new BadRequestException('No podés desactivar tu propio usuario');
-    const row=one((await query('UPDATE usuario SET activo=$1 WHERE idusuario=$2 RETURNING idusuario,nombre,email,rol,activo',[Boolean(b.activo),id])).rows,'Usuario');
-    await audit('usuario',id,'cambiar_estado',u,{activo:row.activo}); return row;
+  @Patch('usuarios/:id') async userState(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+    return transaction(async()=>{
+      const u=actor(req),current=one((await query('SELECT nombre,email,rol,activo FROM usuario WHERE idusuario=$1 FOR UPDATE',[id])).rows,'Usuario');
+      const nombre=b.nombre===undefined?current.nombre:required(b.nombre,'nombre');
+      const email=b.email===undefined?current.email:required(b.email,'correo').toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw new BadRequestException('Correo inválido');
+      const rol=b.rol===undefined?current.rol:allowed(b.rol,['administracion','recepcion','caja','limpieza'] as const,'rol');
+      if(b.activo!==undefined&&typeof b.activo!=='boolean')throw new BadRequestException('Activo debe ser verdadero o falso');
+      const activo=b.activo===undefined?current.activo:b.activo;
+      const password=b.password===undefined||b.password===''?null:required(b.password,'contraseña');
+      if(password&&password.length<10)throw new BadRequestException('La contraseña debe tener al menos 10 caracteres');
+      if(String(id)===String(u.idusuario)&&(!activo||rol!=='administracion'))throw new BadRequestException('No podés quitar tu propio acceso de Administración');
+      const row=one((await query('UPDATE usuario SET nombre=$1,email=$2,rol=$3,activo=$4,clave_hash=COALESCE($5,clave_hash) WHERE idusuario=$6 RETURNING idusuario,nombre,email,rol,activo',[nombre,email,rol,activo,password?await bcrypt.hash(password,12):null,id])).rows,'Usuario');
+      await audit('usuario',id,'editar',u,{antes:current,despues:{nombre,email,rol,activo},contrasena_actualizada:Boolean(password)});return row;
+    }).catch(dbError);
   }
 
   @Get('tipos-habitacion') async roomTypes() { return (await query('SELECT * FROM tipo_habitacion WHERE activo ORDER BY nombre')).rows; }
-  @Get('formas-pago') @Roles('administracion','caja') async paymentMethods() {
+  @Get('formas-pago') async paymentMethods() {
     return (await query('SELECT * FROM forma_pago WHERE activo ORDER BY nombre')).rows;
   }
-  @Get('formas-pago/admin') @Roles('administracion') async paymentMethodsAdmin() {
+  @Get('formas-pago/admin') async paymentMethodsAdmin() {
     return (await query('SELECT f.*,(EXISTS(SELECT 1 FROM pago p WHERE p.fk_idforma_pago=f.idforma_pago) OR EXISTS(SELECT 1 FROM gasto g WHERE g.fk_idforma_pago=f.idforma_pago) OR EXISTS(SELECT 1 FROM compra_pago cp WHERE cp.fk_idforma_pago=f.idforma_pago)) AS utilizada FROM forma_pago f ORDER BY f.nombre')).rows;
   }
-  @Post('formas-pago') @Roles('administracion') async createPaymentMethod(@Body() b:any,@Req() req:any) {
+  @Post('formas-pago') async createPaymentMethod(@Body() b:any,@Req() req:any) {
     const u=actor(req),nombre=required(b.nombre,'nombre');
     if(b.es_efectivo!==undefined&&typeof b.es_efectivo!=='boolean')throw new BadRequestException('Cuenta como efectivo debe ser booleano');
     if(b.activo!==undefined&&typeof b.activo!=='boolean')throw new BadRequestException('Activo debe ser booleano');
@@ -59,7 +70,7 @@ export class PmsController {
       return row;
     }); } catch(e){dbError(e);}
   }
-  @Patch('formas-pago/:id') @Roles('administracion') async updatePaymentMethod(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Patch('formas-pago/:id') async updatePaymentMethod(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req),methodId=positiveInt(id,'forma de pago');
     if(b.es_efectivo!==undefined&&typeof b.es_efectivo!=='boolean')throw new BadRequestException('Cuenta como efectivo debe ser booleano');
     if(b.activo!==undefined&&typeof b.activo!=='boolean')throw new BadRequestException('Activo debe ser booleano');
@@ -74,30 +85,30 @@ export class PmsController {
       return {...row,utilizada};
     }); } catch(e){dbError(e);}
   }
-  @Get('tipos-habitacion/admin') @Roles('administracion') async roomTypesAdmin() { return (await query('SELECT * FROM tipo_habitacion ORDER BY activo DESC,nombre')).rows; }
-  @Post('tipos-habitacion') @Roles('administracion') async createRoomType(@Body() b:any,@Req() req:any) {
+  @Get('tipos-habitacion/admin') async roomTypesAdmin() { return (await query('SELECT * FROM tipo_habitacion ORDER BY activo DESC,nombre')).rows; }
+  @Post('tipos-habitacion') async createRoomType(@Body() b:any,@Req() req:any) {
     const u=actor(req), row=(await query('INSERT INTO tipo_habitacion(nombre,capacidad,descripcion,creado_por) VALUES($1,$2,$3,$4) RETURNING *',[required(b.nombre,'nombre'),positiveInt(b.capacidad,'capacidad'),b.descripcion||null,u.nombre])).rows[0];
     await audit('tipo_habitacion',row.idtipo_habitacion,'crear',u); return row;
   }
-  @Patch('tipos-habitacion/:id') @Roles('administracion') async updateRoomType(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Patch('tipos-habitacion/:id') async updateRoomType(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req), current=one((await query('SELECT * FROM tipo_habitacion WHERE idtipo_habitacion=$1',[id])).rows,'Tipo de habitación');
     const nombre=required(b.nombre ?? current.nombre,'nombre'), capacidad=positiveInt(b.capacidad ?? current.capacidad,'capacidad');
     if(b.activo !== undefined && typeof b.activo !== 'boolean') throw new BadRequestException('activo debe ser booleano');
     const row=one((await query('UPDATE tipo_habitacion SET nombre=$1,capacidad=$2,descripcion=$3,activo=$4 WHERE idtipo_habitacion=$5 RETURNING *',[nombre,capacidad,b.descripcion===undefined?current.descripcion:(b.descripcion||null),b.activo===undefined?current.activo:b.activo,id])).rows,'Tipo de habitación');
     await audit('tipo_habitacion',id,'editar',u,{activo:row.activo}); return row;
   }
-  @Delete('tipos-habitacion/:id') @Roles('administracion') async deleteRoomType(@Param('id') id:string,@Req() req:any) {
+  @Delete('tipos-habitacion/:id') async deleteRoomType(@Param('id') id:string,@Req() req:any) {
     const u=actor(req), row=one((await query('UPDATE tipo_habitacion SET activo=false WHERE idtipo_habitacion=$1 AND activo RETURNING *',[id])).rows,'Tipo de habitación');
     await audit('tipo_habitacion',id,'desactivar',u); return row;
   }
-  @Get('pisos') @Roles('administracion','recepcion') async floors() { return (await query('SELECT * FROM piso WHERE activo ORDER BY numero,nombre')).rows; }
-  @Get('pisos/admin') @Roles('administracion') async floorsAdmin() { return (await query('SELECT * FROM piso ORDER BY activo DESC,numero,nombre')).rows; }
-  @Post('pisos') @Roles('administracion') async createFloor(@Body() b:any,@Req() req:any) {
+  @Get('pisos') async floors() { return (await query('SELECT * FROM piso WHERE activo ORDER BY numero,nombre')).rows; }
+  @Get('pisos/admin') async floorsAdmin() { return (await query('SELECT * FROM piso ORDER BY activo DESC,numero,nombre')).rows; }
+  @Post('pisos') async createFloor(@Body() b:any,@Req() req:any) {
     const u=actor(req), numero=positiveInt(b.numero,'número'), nombre=required(b.nombre,'nombre');
     const row=one((await query('INSERT INTO piso(numero,nombre,creado_por) VALUES($1,$2,$3) RETURNING *',[numero,nombre,u.nombre])).rows,'Piso');
     await audit('piso',row.idpiso,'crear',u); return row;
   }
-  @Patch('pisos/:id') @Roles('administracion') async updateFloor(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Patch('pisos/:id') async updateFloor(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req), current=one((await query('SELECT * FROM piso WHERE idpiso=$1',[id])).rows,'Piso');
     const numero=positiveInt(b.numero ?? current.numero,'número'), nombre=required(b.nombre ?? current.nombre,'nombre');
     if(b.activo !== undefined && typeof b.activo !== 'boolean') throw new BadRequestException('activo debe ser booleano');
@@ -114,13 +125,13 @@ export class PmsController {
       WHERE rh.fk_idhabitacion=h.idhabitacion AND rh.activo AND rh.estado='en_casa' AND r.activo AND r.estado='en_casa'
       ORDER BY rh.fecha_creado DESC,rh.idreserva_habitacion DESC LIMIT 1) estadia ON TRUE
     WHERE h.activo ORDER BY h.numero`)).rows; }
-  @Get('habitaciones/admin') @Roles('administracion') async roomsAdmin() { return (await query('SELECT h.*,t.nombre AS tipo,t.capacidad,p.idpiso,p.numero AS piso_numero,p.nombre AS piso_nombre,tar.idtarifa,tar.nombre AS tarifa,tar.monto_gs AS tarifa_monto_gs FROM habitacion h JOIN tipo_habitacion t ON t.idtipo_habitacion=h.fk_idtipo_habitacion JOIN piso p ON p.idpiso=h.fk_idpiso LEFT JOIN tarifa tar ON tar.idtarifa=h.fk_idtarifa ORDER BY h.activo DESC,h.numero')).rows; }
-  @Get('habitaciones/analisis') @Roles('administracion','recepcion') async roomsAnalysis(@Q('desde') desde:string,@Q('hasta') hasta:string) {
+  @Get('habitaciones/admin') async roomsAdmin() { return (await query('SELECT h.*,t.nombre AS tipo,t.capacidad,p.idpiso,p.numero AS piso_numero,p.nombre AS piso_nombre,tar.idtarifa,tar.nombre AS tarifa,tar.monto_gs AS tarifa_monto_gs FROM habitacion h JOIN tipo_habitacion t ON t.idtipo_habitacion=h.fk_idtipo_habitacion JOIN piso p ON p.idpiso=h.fk_idpiso LEFT JOIN tarifa tar ON tar.idtarifa=h.fk_idtarifa ORDER BY h.activo DESC,h.numero')).rows; }
+  @Get('habitaciones/analisis') async roomsAnalysis(@Q('desde') desde:string,@Q('hasta') hasta:string) {
     const start=isoDate(desde,'desde'),end=isoDate(hasta,'hasta');
     if(end<start) throw new BadRequestException('La fecha hasta debe ser posterior o igual a la fecha desde');
     return roomAnalysis(start,end,hotelDate());
   }
-  @Post('habitaciones') @Roles('administracion') async createRoom(@Body() b:any,@Req() req:any) {
+  @Post('habitaciones') async createRoom(@Body() b:any,@Req() req:any) {
     const u=actor(req), piso=positiveInt(b.fk_idpiso,'piso'), tipo=positiveInt(b.fk_idtipo_habitacion,'tipo');
     if(b.activo !== undefined && typeof b.activo !== 'boolean') throw new BadRequestException('activo debe ser booleano');
     one((await query('SELECT idpiso FROM piso WHERE idpiso=$1 AND activo',[piso])).rows,'Piso activo');
@@ -130,10 +141,10 @@ export class PmsController {
     const row=(await query('INSERT INTO habitacion(numero,fk_idpiso,fk_idtipo_habitacion,fk_idtarifa,activo,creado_por) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[required(b.numero,'número'),piso,tipo,tarifa,b.activo===undefined?true:Boolean(b.activo),u.nombre])).rows[0];
     await audit('habitacion',row.idhabitacion,'crear',u); return row;
   }
-  @Patch('habitaciones/:id') @Roles('administracion','recepcion','limpieza') async updateRoom(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Patch('habitaciones/:id') async updateRoom(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req), current=one((await query('SELECT * FROM habitacion WHERE idhabitacion=$1',[id])).rows,'Habitación');
-    if(b.fuera_servicio!==undefined && u.rol!=='administracion') throw new BadRequestException('Solo Administración puede cambiar el estado de servicio');
-    if(u.rol==='administracion' && (b.numero!==undefined || b.fk_idpiso!==undefined || b.fk_idtipo_habitacion!==undefined || b.fk_idtarifa!==undefined || b.activo!==undefined || b.fuera_servicio!==undefined)) {
+    if(b.numero!==undefined || b.fk_idpiso!==undefined || b.fk_idtipo_habitacion!==undefined || b.fk_idtarifa!==undefined || b.activo!==undefined || b.fuera_servicio!==undefined) {
+      if(!req.events?.has('rooms.form'))throw new ForbiddenException('Sin permiso para editar habitación');
       const numero=required(b.numero ?? current.numero,'número'), piso=positiveInt(b.fk_idpiso ?? current.fk_idpiso,'piso'), tipo=positiveInt(b.fk_idtipo_habitacion ?? current.fk_idtipo_habitacion,'tipo'), tarifa=positiveInt(b.fk_idtarifa ?? current.fk_idtarifa,'tarifa');
       one((await query('SELECT idpiso FROM piso WHERE idpiso=$1 AND activo',[piso])).rows,'Piso activo');
       one((await query('SELECT idtipo_habitacion FROM tipo_habitacion WHERE idtipo_habitacion=$1 AND activo',[tipo])).rows,'Tipo de habitación activo');
@@ -143,19 +154,20 @@ export class PmsController {
       const row=one((await query('UPDATE habitacion SET numero=$1,fk_idpiso=$2,fk_idtipo_habitacion=$3,fk_idtarifa=$4,activo=$5,fuera_servicio=$6 WHERE idhabitacion=$7 RETURNING *',[numero,piso,tipo,tarifa,b.activo===undefined?current.activo:b.activo,b.fuera_servicio===undefined?current.fuera_servicio:b.fuera_servicio,id])).rows,'Habitación');
       await audit('habitacion',id,'editar',u,{activo:row.activo,fuera_servicio:row.fuera_servicio}); return row;
     }
+    if(!req.events?.has('housekeeping.form'))throw new ForbiddenException('Sin permiso para cambiar estado de limpieza');
     const estado=allowed(b.estado_limpieza,['limpia','sucia','en_limpieza','inspeccion'] as const,'estado');
     const row=one((await query('UPDATE habitacion SET estado_limpieza=$1 WHERE idhabitacion=$2 AND activo RETURNING *',[estado,id])).rows,'Habitación');
     await audit('habitacion',id,'estado_limpieza',u,{estado}); return row;
   }
-  @Get('tarifas') @Roles('administracion','recepcion') async rates() { return (await query('SELECT t.*,th.nombre AS tipo FROM tarifa t JOIN tipo_habitacion th ON th.idtipo_habitacion=t.fk_idtipo_habitacion WHERE t.activo AND th.activo ORDER BY t.nombre')).rows; }
-  @Get('tarifas/admin') @Roles('administracion') async ratesAdmin() { return (await query('SELECT t.*,th.nombre AS tipo FROM tarifa t JOIN tipo_habitacion th ON th.idtipo_habitacion=t.fk_idtipo_habitacion ORDER BY t.activo DESC,t.nombre')).rows; }
-  @Post('tarifas') @Roles('administracion') async createRate(@Body() b:any,@Req() req:any) {
+  @Get('tarifas') async rates() { return (await query('SELECT t.*,th.nombre AS tipo FROM tarifa t JOIN tipo_habitacion th ON th.idtipo_habitacion=t.fk_idtipo_habitacion WHERE t.activo AND th.activo ORDER BY t.nombre')).rows; }
+  @Get('tarifas/admin') async ratesAdmin() { return (await query('SELECT t.*,th.nombre AS tipo FROM tarifa t JOIN tipo_habitacion th ON th.idtipo_habitacion=t.fk_idtipo_habitacion ORDER BY t.activo DESC,t.nombre')).rows; }
+  @Post('tarifas') async createRate(@Body() b:any,@Req() req:any) {
     const u=actor(req), checkin=timeHHMM(b.hora_checkin ?? '14:00','hora_checkin'), checkout=timeHHMM(b.hora_checkout ?? '12:00','hora_checkout');
     one((await query('SELECT idtipo_habitacion FROM tipo_habitacion WHERE idtipo_habitacion=$1 AND activo',[positiveInt(b.fk_idtipo_habitacion,'tipo')])).rows,'Tipo de habitación activo');
     const row=one((await query('INSERT INTO tarifa(nombre,fk_idtipo_habitacion,fecha_inicio,fecha_fin,hora_checkin,hora_checkout,monto_gs,iva_tasa,creado_por) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',[required(b.nombre,'nombre'),positiveInt(b.fk_idtipo_habitacion,'tipo'),'1900-01-01','2999-12-31',checkin,checkout,nonNegativeGs(b.monto_gs),allowed(Number(b.iva_tasa ?? 10),[0,5,10] as const,'IVA'),u.nombre])).rows,'Tarifa');
     await audit('tarifa',row.idtarifa,'crear',u); return row;
   }
-  @Patch('tarifas/:id') @Roles('administracion') async updateRate(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Patch('tarifas/:id') async updateRate(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req), current=one((await query('SELECT * FROM tarifa WHERE idtarifa=$1',[id])).rows,'Tarifa');
     const nombre=required(b.nombre ?? current.nombre,'nombre');
     const tipo=positiveInt(b.fk_idtipo_habitacion ?? current.fk_idtipo_habitacion,'tipo');
@@ -167,13 +179,13 @@ export class PmsController {
     await audit('tarifa',id,'editar',u,{activo:row.activo}); return row;
   }
 
-  @Get('clientes') @Roles('administracion','recepcion','caja') async clients(@Q('q') q?:string,@Q('pagina') pagina?:string):Promise<any> {
+  @Get('clientes') async clients(@Q('q') q?:string,@Q('pagina') pagina?:string):Promise<any> {
     const sql='SELECT * FROM cliente WHERE activo AND ($1::text IS NULL OR nombre ILIKE $1 OR apellido ILIKE $1 OR documento ILIKE $1 OR ruc ILIKE $1)';
     const params=[q ? `%${q}%` : null];
     if(pagina!==undefined)return paginateList(sql,params,pagina,'idcliente');
     return (await query(sql+' ORDER BY idcliente DESC LIMIT 200',params)).rows;
   }
-  @Get('clientes/:id/reservas') @Roles('administracion','recepcion','caja') async clientReservations(@Param('id') id:string,@Q('pagina') pagina?:string) {
+  @Get('clientes/:id/reservas') async clientReservations(@Param('id') id:string,@Q('pagina') pagina?:string) {
     const clientId=positiveInt(id,'huésped'),page=pagina===undefined?1:positiveInt(pagina,'página'),pageSize=20;
     if(pagina!==undefined&&(typeof pagina!=='string'||!/^\d+$/.test(pagina)))throw new BadRequestException('Página debe ser un entero positivo');
     const offset=(page-1)*pageSize;
@@ -197,27 +209,27 @@ export class PmsController {
       [clientId,pageSize,offset])).rows[0];
     return {...result,pagina:page,por_pagina:pageSize};
   }
-  @Post('clientes') @Roles('administracion','recepcion') async createClient(@Body() b:any,@Req() req:any) {
+  @Post('clientes') async createClient(@Body() b:any,@Req() req:any) {
     const u=actor(req), row=(await query('INSERT INTO cliente(nombre,apellido,tipo_documento,documento,ruc,email,telefono,direccion,pais,creado_por) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',[required(b.nombre,'nombre'),b.apellido||null,b.tipo_documento||null,b.documento||null,b.ruc||null,b.email||null,b.telefono||null,b.direccion||null,b.pais||'Paraguay',u.nombre])).rows[0];
     await audit('cliente',row.idcliente,'crear',u); return row;
   }
-  @Put('clientes/:id') @Roles('administracion','recepcion') async updateClient(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Put('clientes/:id') async updateClient(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req), row=one((await query('UPDATE cliente SET nombre=$1,apellido=$2,tipo_documento=$3,documento=$4,ruc=$5,email=$6,telefono=$7,direccion=$8,pais=$9 WHERE idcliente=$10 AND activo RETURNING *',[required(b.nombre,'nombre'),b.apellido||null,b.tipo_documento||null,b.documento||null,b.ruc||null,b.email||null,b.telefono||null,b.direccion||null,b.pais||'Paraguay',id])).rows,'Cliente');
     await audit('cliente',id,'editar',u); return row;
   }
 
-  @Get('disponibilidad') @Roles('administracion','recepcion') async availability(@Q('desde') desde:string,@Q('hasta') hasta:string) {
+  @Get('disponibilidad') async availability(@Q('desde') desde:string,@Q('hasta') hasta:string) {
     const start=isoDate(desde,'desde'),end=isoDate(hasta,'hasta'); assertDateRange(start,end);
     return (await query(`SELECT h.*,t.nombre AS tipo,p.numero AS piso_numero,p.nombre AS piso_nombre FROM habitacion h JOIN tipo_habitacion t ON t.idtipo_habitacion=h.fk_idtipo_habitacion JOIN piso p ON p.idpiso=h.fk_idpiso
       WHERE h.activo AND NOT h.fuera_servicio AND NOT EXISTS (SELECT 1 FROM reserva_habitacion rh WHERE rh.fk_idhabitacion=h.idhabitacion AND rh.activo AND rh.estado IN ('confirmada','en_casa') AND daterange(rh.fecha_entrada,rh.fecha_salida,'[)') && daterange($1::date,$2::date,'[)')) ORDER BY h.numero`,[start,end])).rows;
   }
-  @Get('calendario') @Roles('administracion','recepcion') async calendar(@Q('desde') desde:string,@Q('hasta') hasta:string) {
+  @Get('calendario') async calendar(@Q('desde') desde:string,@Q('hasta') hasta:string) {
     const start=isoDate(desde,'desde'),end=isoDate(hasta,'hasta'); assertDateRange(start,end);
     return (await query(`SELECT rh.idreserva_habitacion,rh.fk_idhabitacion,rh.fk_idreserva,rh.fecha_entrada::text,rh.fecha_salida::text,rh.estado,r.estado AS estado_reserva,c.nombre,c.apellido,h.numero,p.numero AS piso_numero,p.nombre AS piso_nombre
       FROM reserva_habitacion rh JOIN reserva r ON r.idreserva=rh.fk_idreserva JOIN cliente c ON c.idcliente=r.fk_idcliente JOIN habitacion h ON h.idhabitacion=rh.fk_idhabitacion JOIN piso p ON p.idpiso=h.fk_idpiso
       WHERE rh.activo AND rh.estado <> 'cancelada' AND rh.fecha_entrada < $2::date AND rh.fecha_salida > $1::date ORDER BY h.numero,rh.fecha_entrada`,[start,end])).rows;
   }
-  @Get('reservas') @Roles('administracion','recepcion','caja') async reservations(@Q('estado') estado?:string,@Q('q') q?:string,@Q('pagina') pagina?:string):Promise<any> {
+  @Get('reservas') async reservations(@Q('estado') estado?:string,@Q('q') q?:string,@Q('pagina') pagina?:string,@Req() req?:any):Promise<any> {
     const search=q?.trim()||null;
     const sql=`SELECT r.*,r.fecha_entrada::text AS fecha_entrada,r.fecha_salida::text AS fecha_salida,c.nombre AS cliente_nombre,c.apellido AS cliente_apellido,
       COALESCE(string_agg(DISTINCT h.numero,', '),'') AS habitaciones,
@@ -238,11 +250,14 @@ export class PmsController {
           WHERE busqueda.fk_idreserva=r.idreserva AND busqueda.activo AND hb.numero ILIKE '%' || $2 || '%'))
       GROUP BY r.idreserva,c.idcliente`;
     const params=[estado||null,search];
-    if(pagina!==undefined)return paginateList(sql,params,pagina,'idreserva');
-    return (await query(sql+' ORDER BY r.idreserva DESC LIMIT 300',params)).rows;
+    const limited=Boolean(req&&!req.events?.has('reservations.list'));
+    const redact=(row:any)=>{const {saldo_gs,...stay}=row;return stay};
+    if(pagina!==undefined){const result=await paginateList(sql,params,pagina,'idreserva');return limited?{...result,registros:result.registros.map(redact)}:result}
+    const rows=(await query(sql+' ORDER BY r.idreserva DESC LIMIT 300',params)).rows;
+    return limited?rows.map(redact):rows;
   }
-  @Get('reservas/:id') @Roles('administracion','recepcion','caja','limpieza') async reservation(@Param('id') id:string,@Req() req:any) {
-    if(actor(req).rol==='limpieza') {
+  @Get('reservas/:id') async reservation(@Param('id') id:string,@Req() req:any) {
+    if(!req.events?.has('reservations.financial_detail')) {
       const r=one((await query(`SELECT r.idreserva,r.fecha_entrada::text,r.fecha_salida::text,r.estado,c.nombre AS cliente_nombre,c.apellido AS cliente_apellido
         FROM reserva r JOIN cliente c ON c.idcliente=r.fk_idcliente WHERE r.idreserva=$1 AND r.activo`,[id])).rows,'Reserva');
       const rooms=(await query(`SELECT rh.idreserva_habitacion,rh.fk_idhabitacion,rh.fecha_entrada::text,rh.fecha_salida::text,rh.estado,h.numero
@@ -259,7 +274,7 @@ export class PmsController {
     const paid=payments.rows.filter(x=>!x.anulado).reduce((a,x)=>a+(x.clase==='devolucion'?-1n:1n)*BigInt(x.monto_gs),0n);
     return {...r,habitaciones:rooms.rows,cargos:charges.rows,pagos:payments.rows,facturas:invoices.rows,total_gs:debit.toString(),pagado_gs:paid.toString(),saldo_gs:(debit-paid).toString()};
   }
-  @Post('reservas') @Roles('administracion','recepcion') async createReservation(@Body() b:any,@Req() req:any) {
+  @Post('reservas') async createReservation(@Body() b:any,@Req() req:any) {
     const u=actor(req),start=isoDate(b.fecha_entrada,'fecha_entrada'),end=isoDate(b.fecha_salida,'fecha_salida'); assertDateRange(start,end);
     if(!Array.isArray(b.habitaciones)||!b.habitaciones.length) throw new BadRequestException('Seleccioná al menos una habitación');
     try {
@@ -276,7 +291,7 @@ export class PmsController {
       }); await audit('reserva',row.idreserva,'crear',u); return row;
     } catch(e) { dbError(e); }
   }
-  @Post('reservas/:id/check-in') @Roles('administracion','recepcion') async checkin(@Param('id') id:string,@Req() req:any) {
+  @Post('reservas/:id/check-in') async checkin(@Param('id') id:string,@Req() req:any) {
     const u=actor(req);
     const r=await transaction(async tx=>{
       const row=one((await tx.query('SELECT * FROM reserva WHERE idreserva=$1 AND activo FOR UPDATE',[id])).rows,'Reserva');
@@ -288,7 +303,7 @@ export class PmsController {
       return (await tx.query("UPDATE reserva SET estado='en_casa',fecha_checkin=clock_timestamp() WHERE idreserva=$1 RETURNING *",[id])).rows[0];
     }); await audit('reserva',id,'check_in',u); return r;
   }
-  @Post('reservas/:id/check-out') @Roles('administracion','recepcion') async checkout(@Param('id') id:string,@Req() req:any) {
+  @Post('reservas/:id/check-out') async checkout(@Param('id') id:string,@Req() req:any) {
     const u=actor(req);
     const r=await transaction(async tx=>{
       const row=one((await tx.query('SELECT r.*,c.nombre AS cliente_nombre,c.apellido AS cliente_apellido FROM reserva r JOIN cliente c ON c.idcliente=r.fk_idcliente WHERE r.idreserva=$1 AND r.activo FOR UPDATE OF r',[id])).rows,'Reserva');
@@ -317,14 +332,14 @@ export class PmsController {
       return (await tx.query("UPDATE reserva SET estado='finalizada',fecha_checkout=$2,checkout_resumen=$3::jsonb WHERE idreserva=$1 RETURNING *",[id,checkoutAt,JSON.stringify(summary)])).rows[0];
     }); await audit('reserva',id,'check_out',u); return r;
   }
-  @Get('reservas/:id/check-out/ticket') @Roles('administracion','recepcion','caja') async checkoutTicket(@Param('id') id:string,@Res() res:any) {
+  @Get('reservas/:id/check-out/ticket') async checkoutTicket(@Param('id') id:string,@Res() res:any) {
     const summary=one((await query("SELECT checkout_resumen FROM reserva WHERE idreserva=$1 AND activo AND estado='finalizada' AND checkout_resumen IS NOT NULL",[positiveInt(id,'reserva')])).rows,'Ticket de check-out').checkout_resumen;
     const pdf=createCheckoutTicket(summary);
     res.setHeader('Content-Type','application/pdf');
     res.setHeader('Content-Disposition',`inline; filename="reserva-${id}-check-out.pdf"`);
     pdf.pipe(res);
   }
-  @Post('reservas/:id/cambiar-habitacion') @Roles('administracion','recepcion') async transferRoom(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Post('reservas/:id/cambiar-habitacion') async transferRoom(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req),todayLocal=hotelDate(),fromId=positiveInt(b.fk_idreserva_habitacion,'asignación'),toId=positiveInt(b.fk_idhabitacion,'nueva habitación'),rate=nonNegativeGs(b.tarifa_noche_gs,'tarifa');
     try {
       const result=await transaction(async tx=>{
@@ -349,7 +364,7 @@ export class PmsController {
       }); await audit('reserva',id,'cambiar_habitacion',u,result); return result;
     } catch(e){dbError(e);}
   }
-  @Post('reservas/:id/cancelar') @Roles('administracion','recepcion') async cancel(@Param('id') id:string,@Req() req:any) {
+  @Post('reservas/:id/cancelar') async cancel(@Param('id') id:string,@Req() req:any) {
     const u=actor(req);
     const r=await transaction(async tx=>{
       const row=one((await tx.query('SELECT * FROM reserva WHERE idreserva=$1 AND activo FOR UPDATE',[id])).rows,'Reserva');
@@ -359,7 +374,7 @@ export class PmsController {
       return (await tx.query("UPDATE reserva SET estado='cancelada' WHERE idreserva=$1 RETURNING *",[id])).rows[0];
     }); await audit('reserva',id,'cancelar',u); return r;
   }
-  @Post('reservas/:id/cargos') @Roles('administracion','recepcion','caja') async charge(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Post('reservas/:id/cargos') async charge(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req), tipo=allowed(b.tipo,['extra','ajuste','descuento'] as const,'tipo');
     const row=await transaction(async tx=>{
       const reservation=one((await tx.query('SELECT estado FROM reserva WHERE idreserva=$1 AND activo FOR UPDATE',[id])).rows,'Reserva');
@@ -369,7 +384,7 @@ export class PmsController {
     });
     await audit('movimiento',row.idmovimiento,'crear',u); return row;
   }
-  @Post('reservas/:id/pagos') @Roles('administracion','caja') async payment(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Post('reservas/:id/pagos') async payment(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req);
     const forma=positiveInt(b.fk_idforma_pago,'forma de pago');
     const monto=nonNegativeGs(b.monto_gs); if(monto==='0') throw new BadRequestException('El pago debe ser mayor a cero');
@@ -398,7 +413,7 @@ export class PmsController {
     });
   }
 
-  @Post('pagos/:id/anular') @Roles('administracion','caja') async annulPayment(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Post('pagos/:id/anular') async annulPayment(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req),motivo=required(b.motivo,'motivo de anulación');
     return transaction(async tx=>{
       const original=one((await tx.query('SELECT * FROM pago WHERE idpago=$1 AND activo',[positiveInt(id,'pago')])).rows,'Pago');
@@ -416,20 +431,20 @@ export class PmsController {
     });
   }
 
-  @Get('cajas') @Roles('administracion','caja') async cashHistory(@Q('estado') estado?:string) {
+  @Get('cajas') async cashHistory(@Q('estado') estado?:string) {
     if(estado!==undefined) allowed(estado,['abierta','cerrada'] as const,'estado');
     return (await query(`SELECT idcaja,abierta_en,cerrada_en,monto_inicial_gs,monto_cierre_gs,(cierre_comprobante IS NOT NULL) AS tiene_ticket FROM caja
       WHERE activo AND ($1::text IS NULL OR ($1='abierta' AND cerrada_en IS NULL) OR ($1='cerrada' AND cerrada_en IS NOT NULL))
       ORDER BY CASE WHEN $1='cerrada' THEN cerrada_en ELSE abierta_en END DESC,idcaja DESC`,[estado??null])).rows;
   }
-  @Get('cajas/:id/ticket') @Roles('administracion','caja') async cashTicket(@Param('id') id:string,@Res() res:any) {
+  @Get('cajas/:id/ticket') async cashTicket(@Param('id') id:string,@Res() res:any) {
     const summary=one((await query('SELECT cierre_comprobante FROM caja WHERE idcaja=$1 AND activo AND cerrada_en IS NOT NULL AND cierre_comprobante IS NOT NULL',[positiveInt(id,'caja')])).rows,'Ticket de cierre de caja').cierre_comprobante as CashCloseSummary;
     const pdf=createCashCloseTicket(summary);
     res.setHeader('Content-Type','application/pdf');
     res.setHeader('Content-Disposition',`inline; filename="caja-${id}-cierre.pdf"`);
     pdf.pipe(res);
   }
-  @Get('cajas/:id/detalle') @Roles('administracion','caja') async cashDetails(@Param('id') id:string) {
+  @Get('cajas/:id/detalle') async cashDetails(@Param('id') id:string) {
     const c=one((await query('SELECT *,caja_totales(idcaja) AS resumen FROM caja WHERE idcaja=$1 AND activo',[positiveInt(id,'caja')])).rows,'Caja');
     const movimientos=(await query(`SELECT d.*,f.nombre AS forma_pago_nombre,p.fk_idreserva,p.fk_idventa,c.nombre AS cliente_nombre,c.apellido AS cliente_apellido,pr.razon_social AS proveedor_nombre,
       CASE WHEN d.fk_idgasto IS NOT NULL OR d.fk_idcompra IS NOT NULL THEN '—' ELSE COALESCE(h.numeros,'Sin habitación') END AS habitaciones
@@ -444,7 +459,11 @@ export class PmsController {
       efectivo_esperado_gs:(BigInt(c.monto_inicial_gs)+BigInt(c.resumen.efectivo_gs)).toString()};
   }
 
-  @Get('caja') @Roles('administracion','caja') async cash() {
+  @Get('caja/estado') async cashStatus() {
+    const row=(await query<{abierta:boolean}>('SELECT EXISTS(SELECT 1 FROM caja WHERE activo AND cerrada_en IS NULL) AS abierta')).rows[0];
+    return {abierta:row.abierta};
+  }
+  @Get('caja') async cash() {
     const c=(await query('SELECT *,caja_totales(idcaja) AS resumen FROM caja WHERE cerrada_en IS NULL AND activo ORDER BY idcaja DESC LIMIT 1')).rows[0];
     if(!c) return null;
     const totals=(await query(`SELECT f.idforma_pago,f.nombre AS forma_pago_nombre,f.es_efectivo,
@@ -453,10 +472,10 @@ export class PmsController {
       WHERE d.fk_idcaja=$1 AND d.activo AND NOT d.anulado GROUP BY f.idforma_pago ORDER BY f.nombre`,[c.idcaja])).rows;
     return {...c,totales:totals,efectivo_esperado_gs:(BigInt(c.monto_inicial_gs)+BigInt(c.resumen.efectivo_gs)).toString()};
   }
-  @Post('caja/abrir') @Roles('administracion','caja') async openCash(@Body() b:any,@Req() req:any) {
+  @Post('caja/abrir') async openCash(@Body() b:any,@Req() req:any) {
     const u=actor(req); try { const row=(await query('INSERT INTO caja(fk_idusuario_apertura,monto_inicial_gs,creado_por) VALUES($1,$2,$3) RETURNING *',[u.idusuario,nonNegativeGs(b.monto_inicial_gs||'0'),u.nombre])).rows[0]; await audit('caja',row.idcaja,'abrir',u); return row; } catch(e){dbError(e);}
   }
-  @Post('caja/cerrar') @Roles('administracion','caja') async closeCash(@Body() b:any,@Req() req:any) {
+  @Post('caja/cerrar') async closeCash(@Body() b:any,@Req() req:any) {
     const u=actor(req),{billetes,total}=countCash(b?.billetes);
     return transaction(async tx=>{
       const c=(await tx.query('SELECT * FROM caja WHERE cerrada_en IS NULL AND activo FOR UPDATE')).rows[0];
@@ -479,11 +498,11 @@ export class PmsController {
   }
 
   @Get('limpieza') async housekeeping() { return (await query(`SELECT t.*,h.numero FROM tarea_limpieza t JOIN habitacion h ON h.idhabitacion=t.fk_idhabitacion WHERE t.activo AND t.estado<>'completada' ORDER BY CASE t.prioridad WHEN 'alta' THEN 0 ELSE 1 END,t.fecha_creado`)).rows; }
-  @Post('limpieza') @Roles('administracion','recepcion','limpieza') async createTask(@Body() b:any,@Req() req:any) {
+  @Post('limpieza') async createTask(@Body() b:any,@Req() req:any) {
     const u=actor(req), row=(await query('INSERT INTO tarea_limpieza(fk_idhabitacion,fk_idusuario_asignado,prioridad,nota,creado_por) VALUES($1,$2,$3,$4,$5) RETURNING *',[positiveInt(b.fk_idhabitacion,'habitación'),b.fk_idusuario_asignado||null,b.prioridad||'normal',b.nota||null,u.nombre])).rows[0];
     await audit('tarea_limpieza',row.idtarea_limpieza,'crear',u); return row;
   }
-  @Patch('limpieza/:id') @Roles('administracion','recepcion','limpieza') async updateTask(@Param('id') id:string,@Body() b:any,@Req() req:any) {
+  @Patch('limpieza/:id') async updateTask(@Param('id') id:string,@Body() b:any,@Req() req:any) {
     const u=actor(req), state=allowed(b.estado,['pendiente','en_progreso','completada'] as const,'estado');
     const row=await transaction(async tx=>{
       const t=one((await tx.query('UPDATE tarea_limpieza SET estado=$1,completada_en=CASE WHEN $1=\'completada\' THEN now() ELSE NULL END WHERE idtarea_limpieza=$2 AND activo RETURNING *',[state,id])).rows,'Tarea');
@@ -492,7 +511,7 @@ export class PmsController {
     }); await audit('tarea_limpieza',id,'estado',u,{estado:state}); return row;
   }
 
-  @Get('tablero') @Roles('administracion','recepcion','caja') async dashboard() {
+  @Get('tablero') async dashboard() {
     const today=hotelDate();
     const [a,d,o,dirty,debt,pending]=await Promise.all([
       query("SELECT COUNT(*)::int AS n FROM reserva WHERE fecha_entrada=$1 AND estado='confirmada' AND activo",[today]),
@@ -506,7 +525,7 @@ export class PmsController {
     const occupied=(await query("SELECT COUNT(DISTINCT fk_idhabitacion)::int AS n FROM reserva_habitacion WHERE activo AND estado='en_casa'")).rows[0].n;
     return {fecha:today,llegadas:a.rows[0].n,salidas:d.rows[0].n,habitaciones:o.rows[0].n,ocupadas:occupied,pendientes_limpieza:dirty.rows[0].n,saldos_pendientes_gs:debt.rows[0].total,facturas_pendientes:pending.rows[0].n};
   }
-  @Get('informes/ocupacion') @Roles('administracion','recepcion') async occupancy(@Q('desde') desde:string,@Q('hasta') hasta:string) {
+  @Get('informes/ocupacion') async occupancy(@Q('desde') desde:string,@Q('hasta') hasta:string) {
     const start=isoDate(desde,'desde'),end=isoDate(hasta,'hasta'); assertDateRange(start,end);
     return (await query(`SELECT d::date::text AS fecha,COUNT(DISTINCT rh.fk_idhabitacion)::int AS ocupadas,
       (SELECT COUNT(*)::int FROM habitacion WHERE activo AND NOT fuera_servicio) AS disponibles
